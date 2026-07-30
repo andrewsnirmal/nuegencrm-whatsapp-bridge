@@ -1,0 +1,17 @@
+{
+  "name": "nuegencrm-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "Standalone Node.js service that holds WhatsApp Web (Baileys) sessions on behalf of NuegenCRM. Runs only on a VPS - never on shared hosting.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "axios": "^1.7.2",
+    "pino": "^9.2.0",
+    "dotenv": "^16.4.5"
+  }
+}
