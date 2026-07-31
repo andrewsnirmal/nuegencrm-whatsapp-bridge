@@ -254,6 +254,12 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
         if (type === 'text') {
 
             console.log("Sending text message...");
+            const lookup = await entry.sock.onWhatsApp(jid);
+
+            console.log("================================");
+            console.log("WhatsApp Lookup");
+            console.log(JSON.stringify(lookup, null, 2));
+            console.log("================================");
 
             sent = await entry.sock.sendMessage(jid, {
                 text: body
