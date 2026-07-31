@@ -97,7 +97,9 @@ async function resolveRecipientJid(sock, to) {
 
     return {
         ...recipient,
-        jid: match.jid,
+        jid: match.lid || match.jid,
+        phoneJid: match.jid,
+        lid: match.lid || null,
         lookup
     };
 }
@@ -329,6 +331,8 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
         console.log(JSON.stringify({
             requested: to,
             jid: recipient.jid,
+            phone_jid: recipient.phoneJid,
+            lid: recipient.lid,
             lookup: recipient.lookup,
             error: recipient.error
         }, null, 2));
@@ -390,6 +394,8 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
         res.json({
             success: true,
             recipient_jid: recipient.jid,
+            recipient_phone_jid: recipient.phoneJid || null,
+            recipient_lid: recipient.lid || null,
             provider_message_id: sent?.key?.id
         });
 
