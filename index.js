@@ -147,9 +147,7 @@ async function startSession(sessionId) {
         version,
         auth: state,
         logger: pino({
-			level: process.env.NODE_ENV === 'production'
-				? 'info'
-				: 'debug'
+			level: process.env.BAILEYS_LOG_LEVEL || 'warn'
 		}),
         printQRInTerminal: false,
     });
