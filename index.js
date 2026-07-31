@@ -296,6 +296,28 @@ app.get('/sessions/:id/status', authMiddleware, (req, res) => {
     res.json({ status: entry.status, qr: entry.qr, phone_number: entry.phoneNumber });
 });
 
+app.get('/sessions', authMiddleware, (req, res) => {
+    const sessionIds = new Set([
+        ...Object.keys(sessions),
+        ...fs.readdirSync(SESSIONS_DIR, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => entry.name)
+    ]);
+
+    res.json({
+        sessions: Array.from(sessionIds).sort().map((id) => {
+            const entry = sessions[id];
+
+            return {
+                id,
+                status: entry?.status || 'saved',
+                phone_number: entry?.phoneNumber || null,
+                has_qr: Boolean(entry?.qr)
+            };
+        })
+    });
+});
+
 app.post('/sessions/:id/sendOLD', authMiddleware, async (req, res) => {
     const entry = sessions[req.params.id];
     if (!entry || entry.status !== 'connected') {
