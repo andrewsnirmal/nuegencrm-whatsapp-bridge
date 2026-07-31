@@ -47,6 +47,7 @@ if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR);
 // credentials themselves persist to disk (sessions/<id>/) so a restart
 // resumes without re-scanning, as long as the session wasn't logged out.
 const sessions = {}; // { [sessionId]: { sock, status, qr, phoneNumber } }
+const sessionStarts = {}; // { [sessionId]: Promise<SessionEntry> }
 
 function normalizeRecipient(to) {
     const value = String(to || '').trim();
@@ -101,6 +102,21 @@ async function resolveRecipientJid(sock, to) {
     };
 }
 
+async function ensureSession(sessionId) {
+    if (sessions[sessionId]) {
+        return sessions[sessionId];
+    }
+
+    if (!sessionStarts[sessionId]) {
+        sessionStarts[sessionId] = startSession(sessionId)
+            .finally(() => {
+                delete sessionStarts[sessionId];
+            });
+    }
+
+    return sessionStarts[sessionId];
+}
+
 function authMiddleware(req, res, next) {
     if (req.headers['x-bridge-secret'] !== BRIDGE_SECRET) {
         return res.status(403).json({ error: 'Invalid bridge secret' });
@@ -144,7 +160,7 @@ async function startSession(sessionId) {
         console.log("Connection Update:", update);
         const { connection, lastDisconnect, qr } = update;
         const entry = sessions[sessionId];
-        if (!entry) return;
+        if (!entry || entry.sock !== sock) return;
 
         
         if (qr) {
@@ -174,13 +190,19 @@ async function startSession(sessionId) {
 
             // Auto-reconnect on anything except an explicit logout.
             if (!loggedOut) {
-                startSession(sessionId).catch((e) => console.error('Reconnect failed:', e));
+                delete sessions[sessionId];
+                setTimeout(() => {
+                    ensureSession(sessionId).catch((e) => console.error('Reconnect failed:', e));
+                }, 3000);
             }
         }
         
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        const entry = sessions[sessionId];
+        if (!entry || entry.sock !== sock) return;
+
         console.log("Incoming Message");
         console.log(JSON.stringify(messages, null, 2));
         
@@ -207,6 +229,14 @@ async function startSession(sessionId) {
         }
     });
 
+    sock.ev.on('messages.update', (updates) => {
+        const entry = sessions[sessionId];
+        if (!entry || entry.sock !== sock) return;
+
+        console.log("Message Status Update");
+        console.log(JSON.stringify(updates, null, 2));
+    });
+
     return sessions[sessionId];
 }
 
@@ -224,10 +254,8 @@ app.get('/health', (req, res) => {
 app.post('/sessions/:id/start', authMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        if (!sessions[id]) {
-            await startSession(id);
-        }
-        res.json({ status: sessions[id].status });
+        const entry = await ensureSession(id);
+        res.json({ status: entry.status });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
@@ -393,5 +421,5 @@ app.listen(PORT, () => {
 });
 
 fs.readdirSync(SESSIONS_DIR).forEach(folder => {
-    startSession(folder).catch(console.error);
+    ensureSession(folder).catch(console.error);
 });
