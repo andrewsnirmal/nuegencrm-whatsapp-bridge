@@ -422,6 +422,24 @@ app.post('/sessions/:id/logout', authMiddleware, async (req, res) => {
     res.json({ status: 'logged_out' });
 });
 
+app.post('/sessions/:id/reset', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const entry = sessions[id];
+
+    if (entry?.sock) {
+        try { await entry.sock.logout(); } catch (_) {}
+        try { entry.sock.end?.(); } catch (_) {}
+    }
+
+    delete sessions[id];
+    delete sessionStarts[id];
+
+    const sessionDir = path.join(SESSIONS_DIR, id);
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+
+    res.json({ status: 'reset', message: 'Session files deleted. Start session again and scan a fresh QR.' });
+});
+//added by to test
 app.listen(PORT, () => {
     console.log(`NuegenCRM WhatsApp bridge listening on port ${PORT}`);
 });
