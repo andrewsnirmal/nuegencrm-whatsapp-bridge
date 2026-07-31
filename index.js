@@ -203,13 +203,20 @@ async function startSession(sessionId) {
         const entry = sessions[sessionId];
         if (!entry || entry.sock !== sock) return;
 
-        console.log("Incoming Message");
-        console.log(JSON.stringify(messages, null, 2));
-        
         if (type !== 'notify') return;
 
         for (const msg of messages) {
             if (msg.key.fromMe || !msg.message) continue;
+
+            if (msg.message.protocolMessage || msg.message.senderKeyDistributionMessage) {
+                continue;
+            }
+
+            console.log("Incoming Message", JSON.stringify({
+                from: msg.key.remoteJid,
+                id: msg.key.id,
+                timestamp: msg.messageTimestamp
+            }));
 
             const from = msg.key.remoteJid?.split('@')[0];
             const text =
