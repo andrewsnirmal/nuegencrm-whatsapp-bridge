@@ -119,6 +119,26 @@ async function ensureSession(sessionId) {
     return sessionStarts[sessionId];
 }
 
+async function closeSession(id, logout = false) {
+    const entry = sessions[id];
+
+    if (entry?.sock) {
+        if (logout) {
+            try { await entry.sock.logout(); } catch (_) {}
+        }
+
+        try { entry.sock.end?.(); } catch (_) {}
+    }
+
+    delete sessions[id];
+    delete sessionStarts[id];
+}
+
+function deleteSessionFiles(id) {
+    const sessionDir = path.join(SESSIONS_DIR, id);
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+}
+
 function authMiddleware(req, res, next) {
     if (req.headers['x-bridge-secret'] !== BRIDGE_SECRET) {
         return res.status(403).json({ error: 'Invalid bridge secret' });
@@ -419,30 +439,36 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
 
 });
 app.post('/sessions/:id/logout', authMiddleware, async (req, res) => {
-    const entry = sessions[req.params.id];
-    if (entry?.sock) {
-        try { await entry.sock.logout(); } catch (_) {}
-    }
-    delete sessions[req.params.id];
+    await closeSession(req.params.id, true);
     res.json({ status: 'logged_out' });
 });
 
 app.post('/sessions/:id/reset', authMiddleware, async (req, res) => {
     const { id } = req.params;
-    const entry = sessions[id];
+    const logout = req.body?.logout === true;
 
-    if (entry?.sock) {
-        try { await entry.sock.logout(); } catch (_) {}
-        try { entry.sock.end?.(); } catch (_) {}
-    }
+    await closeSession(id, logout);
+    deleteSessionFiles(id);
 
-    delete sessions[id];
-    delete sessionStarts[id];
+    res.json({
+        status: 'reset',
+        logout,
+        message: 'Session files deleted. Start session again and scan a fresh QR.'
+    });
+});
 
-    const sessionDir = path.join(SESSIONS_DIR, id);
-    fs.rmSync(sessionDir, { recursive: true, force: true });
+app.delete('/sessions/:id', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const logout = req.query.logout === 'true' || req.body?.logout === true;
 
-    res.json({ status: 'reset', message: 'Session files deleted. Start session again and scan a fresh QR.' });
+    await closeSession(id, logout);
+    deleteSessionFiles(id);
+
+    res.json({
+        status: 'deleted',
+        logout,
+        message: 'Session removed from bridge storage.'
+    });
 });
 //added by to test
 app.listen(PORT, () => {
