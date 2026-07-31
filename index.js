@@ -42,15 +42,64 @@ const LARAVEL_WEBHOOK_URL = process.env.LARAVEL_WEBHOOK_URL;
 const SESSIONS_DIR = path.join(__dirname, 'sessions');
 
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR);
-// added
-fs.readdirSync(SESSIONS_DIR).forEach(folder => {
-    startSession(folder).catch(console.error);
-});
 
 // In-memory registry of active sockets/state per session ID. Auth
 // credentials themselves persist to disk (sessions/<id>/) so a restart
 // resumes without re-scanning, as long as the session wasn't logged out.
 const sessions = {}; // { [sessionId]: { sock, status, qr, phoneNumber } }
+
+function normalizeRecipient(to) {
+    const value = String(to || '').trim();
+
+    if (!value) {
+        return { error: 'Recipient phone number is required' };
+    }
+
+    if (value.endsWith('@g.us')) {
+        return { jid: value, isGroup: true };
+    }
+
+    const digits = value.split('@')[0].replace(/[^\d]/g, '');
+
+    if (digits.length < 8) {
+        return {
+            error: 'Recipient phone number must include country code, e.g. 919876543210'
+        };
+    }
+
+    return {
+        digits,
+        jid: `${digits}@s.whatsapp.net`,
+        isGroup: false
+    };
+}
+
+async function resolveRecipientJid(sock, to) {
+    const recipient = normalizeRecipient(to);
+
+    if (recipient.error || recipient.isGroup) {
+        return recipient;
+    }
+
+    const lookup = await sock.onWhatsApp(recipient.digits);
+    const match = Array.isArray(lookup)
+        ? lookup.find((item) => item.exists)
+        : null;
+
+    if (!match?.jid) {
+        return {
+            ...recipient,
+            lookup,
+            error: 'Recipient phone number is not registered on WhatsApp'
+        };
+    }
+
+    return {
+        ...recipient,
+        jid: match.jid,
+        lookup
+    };
+}
 
 function authMiddleware(req, res, next) {
     if (req.headers['x-bridge-secret'] !== BRIDGE_SECRET) {
@@ -241,27 +290,39 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
 
     const { to, type, body, mediaUrl, caption } = req.body;
 
-    const jid = `${to.replace(/[^\d]/g, '')}@s.whatsapp.net`;
-
     console.log("Recipient:", to);
-    console.log("JID:", jid);
     console.log("Message Type:", type);
 
     try {
+        const recipient = await resolveRecipientJid(entry.sock, to);
+
+        console.log("================================");
+        console.log("WhatsApp Recipient Lookup");
+        console.log(JSON.stringify({
+            requested: to,
+            jid: recipient.jid,
+            lookup: recipient.lookup,
+            error: recipient.error
+        }, null, 2));
+        console.log("================================");
+
+        if (recipient.error) {
+            return res.status(422).json({
+                success: false,
+                error: recipient.error,
+                requested_recipient: to,
+                normalized_recipient: recipient.digits || recipient.jid || null,
+                lookup: recipient.lookup || null
+            });
+        }
 
         let sent;
 
         if (type === 'text') {
 
             console.log("Sending text message...");
-            const lookup = await entry.sock.onWhatsApp(jid);
 
-            console.log("================================");
-            console.log("WhatsApp Lookup");
-            console.log(JSON.stringify(lookup, null, 2));
-            console.log("================================");
-
-            sent = await entry.sock.sendMessage(jid, {
+            sent = await entry.sock.sendMessage(recipient.jid, {
                 text: body
             });
 
@@ -273,7 +334,14 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
                 ? 'document'
                 : type;
 
-            sent = await entry.sock.sendMessage(jid, {
+            if (!mediaUrl) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'mediaUrl is required for media messages'
+                });
+            }
+
+            sent = await entry.sock.sendMessage(recipient.jid, {
                 [key]: { url: mediaUrl },
                 caption
             });
@@ -293,6 +361,7 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
 
         res.json({
             success: true,
+            recipient_jid: recipient.jid,
             provider_message_id: sent?.key?.id
         });
 
@@ -321,4 +390,8 @@ app.post('/sessions/:id/logout', authMiddleware, async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`NuegenCRM WhatsApp bridge listening on port ${PORT}`);
+});
+
+fs.readdirSync(SESSIONS_DIR).forEach(folder => {
+    startSession(folder).catch(console.error);
 });
