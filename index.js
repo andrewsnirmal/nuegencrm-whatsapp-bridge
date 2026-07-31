@@ -92,10 +92,12 @@ async function startSession(sessionId) {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
+        console.log("Connection Update:", update);
         const { connection, lastDisconnect, qr } = update;
         const entry = sessions[sessionId];
         if (!entry) return;
 
+        
         if (qr) {
             entry.status = 'qr_pending';
             entry.qr = await QRCode.toDataURL(qr);
@@ -126,9 +128,13 @@ async function startSession(sessionId) {
                 startSession(sessionId).catch((e) => console.error('Reconnect failed:', e));
             }
         }
+        
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        console.log("Incoming Message");
+        console.log(JSON.stringify(messages, null, 2));
+        
         if (type !== 'notify') return;
 
         for (const msg of messages) {
@@ -186,7 +192,7 @@ app.get('/sessions/:id/status', authMiddleware, (req, res) => {
     res.json({ status: entry.status, qr: entry.qr, phone_number: entry.phoneNumber });
 });
 
-app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
+app.post('/sessions/:id/sendOLD', authMiddleware, async (req, res) => {
     const entry = sessions[req.params.id];
     if (!entry || entry.status !== 'connected') {
         return res.status(400).json({ error: 'Session not connected' });
@@ -212,7 +218,92 @@ app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+app.post('/sessions/:id/send', authMiddleware, async (req, res) => {
 
+    console.log("======================================");
+    console.log("SEND REQUEST RECEIVED");
+    console.log("Session:", req.params.id);
+    console.log("Body:", JSON.stringify(req.body, null, 2));
+
+    const entry = sessions[req.params.id];
+
+    if (!entry) {
+        console.log("ERROR: Session not found");
+        return res.status(400).json({ error: 'Session not found' });
+    }
+
+    console.log("Session Status:", entry.status);
+
+    if (entry.status !== 'connected') {
+        console.log("ERROR: Session is not connected");
+        return res.status(400).json({ error: 'Session not connected' });
+    }
+
+    const { to, type, body, mediaUrl, caption } = req.body;
+
+    const jid = `${to.replace(/[^\d]/g, '')}@s.whatsapp.net`;
+
+    console.log("Recipient:", to);
+    console.log("JID:", jid);
+    console.log("Message Type:", type);
+
+    try {
+
+        let sent;
+
+        if (type === 'text') {
+
+            console.log("Sending text message...");
+
+            sent = await entry.sock.sendMessage(jid, {
+                text: body
+            });
+
+        } else if (['image', 'video', 'document'].includes(type)) {
+
+            console.log("Sending media message...");
+
+            const key = type === 'document'
+                ? 'document'
+                : type;
+
+            sent = await entry.sock.sendMessage(jid, {
+                [key]: { url: mediaUrl },
+                caption
+            });
+
+        } else {
+
+            console.log("Unsupported type:", type);
+
+            return res.status(400).json({
+                error: `Unsupported type: ${type}`
+            });
+
+        }
+
+        console.log("SUCCESS");
+        console.log(sent);
+
+        res.json({
+            success: true,
+            provider_message_id: sent?.key?.id
+        });
+
+    } catch (err) {
+
+        console.log("SEND FAILED");
+        console.error(err);
+
+        res.status(500).json({
+            success: false,
+            error: err.message,
+            stack: err.stack
+        });
+
+    }
+
+});
 app.post('/sessions/:id/logout', authMiddleware, async (req, res) => {
     const entry = sessions[req.params.id];
     if (entry?.sock) {
