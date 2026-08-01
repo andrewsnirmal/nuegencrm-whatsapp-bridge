@@ -89,6 +89,9 @@ async function resolveRecipientJid(sock, to) {
     }
 
     const lookup = await sock.onWhatsApp(recipient.digits);
+    console.log("========== onWhatsApp Lookup ==========");
+    console.log(JSON.stringify(lookup, null, 2));
+    console.log("=======================================");
     const match = Array.isArray(lookup)
         ? lookup.find((item) => item.exists)
         : null;
@@ -279,7 +282,7 @@ async function startSession(sessionId) {
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        service: 'NuegenCRM WhatsApp Bridge',
+        service: 'NuegenCRM WhatsApp Bridge-v2',
         uptime: process.uptime(),
         sessions: Object.keys(sessions).length
     });
