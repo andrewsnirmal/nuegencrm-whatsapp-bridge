@@ -49,6 +49,8 @@ if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR);
 const sessions = {}; // { [sessionId]: { sock, status, qr, phoneNumber } }
 const sessionStarts = {}; // { [sessionId]: Promise<SessionEntry> }
 
+const healthRoutes = require("./routes/health");
+
 function normalizeRecipient(to) {
     const value = String(to || '').trim();
 
@@ -145,12 +147,7 @@ function deleteSessionFiles(id) {
     fs.rmSync(sessionDir, { recursive: true, force: true });
 }
 
-function authMiddleware(req, res, next) {
-    if (req.headers['x-bridge-secret'] !== BRIDGE_SECRET) {
-        return res.status(403).json({ error: 'Invalid bridge secret' });
-    }
-    next();
-}
+
 
 async function postToLaravel(payload) {
     if (!LARAVEL_WEBHOOK_URL) return;
@@ -499,10 +496,11 @@ app.delete('/sessions/:id', authMiddleware, async (req, res) => {
     });
 });
 //added by to test
+
 app.listen(PORT, () => {
     console.log(`NuegenCRM WhatsApp bridge listening on port ${PORT}`);
 });
 
-fs.readdirSync(SESSIONS_DIR).forEach(folder => {
-    ensureSession(folder).catch(console.error);
-});
+// fs.readdirSync(SESSIONS_DIR).forEach(folder => {
+//     ensureSession(folder).catch(console.error);
+// });
