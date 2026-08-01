@@ -502,9 +502,23 @@ app.delete('/sessions/:id', authMiddleware, async (req, res) => {
 //added by to test
 
 app.listen(PORT, () => {
-    console.log(`NuegenCRM WhatsApp bridge listening on port ${PORT}`);
+    console.log("=======================================");
+    console.log("NuegenCRM WhatsApp Bridge v2");
+    console.log(`Port      : ${PORT}`);
+    console.log(`Node      : ${process.version}`);
+    console.log(`Started   : ${new Date().toISOString()}`);
+    console.log("=======================================");
 });
 
-// fs.readdirSync(SESSIONS_DIR).forEach(folder => {
-//     ensureSession(folder).catch(console.error);
-// });
+
+
+const sessions = fs.readdirSync(SESSIONS_DIR);
+
+console.log(`Found ${sessions.length} saved session(s).`);
+
+sessions.forEach(folder => {
+    console.log(`Restoring session: ${folder}`);
+    ensureSession(folder).catch(err => {
+        console.error(`Failed restoring ${folder}`, err);
+    });
+});
