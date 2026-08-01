@@ -512,11 +512,11 @@ app.listen(PORT, () => {
 
 
 
-const sessions = fs.readdirSync(SESSIONS_DIR);
+const sessionFolders = fs.readdirSync(SESSIONS_DIR);
 
-console.log(`Found ${sessions.length} saved session(s).`);
+console.log(`Found ${sessionFolders.length} saved session(s).`);
 
-sessions.forEach(folder => {
+sessionFolders.forEach(folder => {
     console.log(`Restoring session: ${folder}`);
     ensureSession(folder).catch(err => {
         console.error(`Failed restoring ${folder}`, err);
