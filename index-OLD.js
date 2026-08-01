@@ -95,15 +95,9 @@ async function resolveRecipientJid(sock, to) {
         };
     }
 
-    // NOTE: previously this preferred match.lid over match.jid. Sending to
-    // the lid address has been unreliable in practice (message accepted by
-    // WhatsApp's server - status "pending" - but never actually delivered
-    // to the recipient's device). Prefer the classic phone JID
-    // (<digits>@s.whatsapp.net) and only fall back to lid if no phone JID
-    // was returned by the lookup.
     return {
         ...recipient,
-        jid: match.jid || match.lid,
+        jid: match.lid || match.jid,
         phoneJid: match.jid,
         lid: match.lid || null,
         lookup
