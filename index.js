@@ -52,6 +52,9 @@ const sessionStarts = {}; // { [sessionId]: Promise<SessionEntry> }
 const healthRoutes = require("./routes/health");
 const authMiddleware = require('./middleware/auth');
 
+app.use(authMiddleware);
+app.use('/health', healthRoutes);
+
 function normalizeRecipient(to) {
     const value = String(to || '').trim();
 
